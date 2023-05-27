@@ -5,6 +5,7 @@ import json
 import re
 import time
 import threading
+import pytchat
 
 import keyboard
 
@@ -19,13 +20,19 @@ openai.api_key = OPENAI_API_KEY
 
 # setup var
 user_name = "System"
+auto_speech_default_count = 10
+
+blacklist = ["Nightbot", "streamelements"]
 
 # app var
 current_user_message = ""
-prev_user_message = ""
+prev_live_chat = ""
+live_chat = ""
+live_chat_user = ""
+
 conversation = []
 history = {"history" : conversation}
-auto_speech_count = 10
+auto_speech_count = auto_speech_default_count
 is_speaking = False
 
 
@@ -46,8 +53,27 @@ def handle_from_input(text):
     # time.sleep(duration)
     chat_gpt_generate()
 
+def yt_live(live_id):
+    global live_chat, live_chat_user
+    live = pytchat.create(video_id=live_id)
+    while live.is_alive():
+        for c in live.get().sync_items():
+            if c.author.name in blacklist:
+                 continue
+            
+            if not c.message.startswith("!"):
+                chat_raw = re.sub(r':[^\s]+:', '', c.message)
+                chat_raw = chat_raw.replace('#', '')
+                live_chat = chat_raw
+                live_chat_user = c.author.name
+                print('new message')
+
 
 def record_audio():
+    # to prevent assistant idle talk when do voice input
+    global is_speaking
+    is_speaking = True
+
     CHUNK = 1024
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
@@ -87,7 +113,7 @@ def record_audio():
     format_audio_to_text("recording.wav")
 
 def format_audio_to_text(file):
-    global is_speaking
+    
     try:
         file_audio = open(file, "rb")
 
@@ -101,11 +127,30 @@ def format_audio_to_text(file):
         
         result = user_name + " berkata " + message
         add_conversation("user", result)
-        is_speaking = True
         chat_gpt_generate()
     except Exception as e:
         print("Error in formating audio: {0}".format(e))
         return
+    
+def live_preparation():
+    global live_chat, prev_live_chat, is_speaking, live_chat_user
+    while True:
+        if not is_speaking and prev_live_chat != live_chat:
+
+            if len(live_chat) > 50:
+                return
+
+            is_speaking = True
+            prev_live_chat = live_chat
+
+            print("Questions: " + live_chat)
+
+            result = live_chat_user + " berkata " + live_chat
+
+            add_conversation("user", result)
+            speech_text(f"dari {live_chat_user}, {live_chat}")
+            chat_gpt_generate()
+        time.sleep(1)
 
 def chat_gpt_generate():
     global auto_speech_count, is_speaking
@@ -146,11 +191,11 @@ def chat_gpt_generate():
         speech_text(clean_message)
 
         is_speaking = False
-        auto_speech_count = 10
+        auto_speech_count = auto_speech_default_count
     except Exception as e:
         print("Generate response Error: {0}".format(e))
         is_speaking = False
-        auto_speech_count = 10
+        auto_speech_count = auto_speech_default_count
 
 def combined_message(message):
     global current_user_message
@@ -171,21 +216,28 @@ def auto_speech():
     while True:
         time.sleep(1)
         auto_speech_count -= 1
-        # print(auto_speech_count)
+        print(auto_speech_count)
 
         if auto_speech_count <= 0 and not is_speaking:
-            add_conversation("system", "you are idling. talk anything to your viewer")
+            add_conversation("system", "you are idling. talk anything to your viewer without say hello")
             chat_gpt_generate()
 
 
 
 if __name__ == "__main__":
 
-    user = input("Accessing as: ")
-    user_name = user
+    print('Mode Selection')
+    print('"1" for Use Voice Mode')
+    print('"2" for Use Terminal Mode')
+    print('"3" for Use Youtube Live Mode')
     mode = input("Mode: ")
+
+    auto_speech_default_count = int(input("Auto speech every: "))
+    
     try:
         if mode == "1":
+            user = input("Accessing as: ")
+            user_name = user
             print('hold SPACE to record and wait until "recording..." displayed before speaking')
             t = threading.Thread(target=auto_speech)
             t.start()
@@ -194,11 +246,22 @@ if __name__ == "__main__":
                     record_audio()
 
         elif mode == "2":
+            user = input("Accessing as: ")
+            user_name = user
             t = threading.Thread(target=auto_speech)
             t.start()
             while True:
                 text = input('say something: ')
                 handle_from_input(text=text)
+        
+        elif mode == '3':
+            # live_id = input("Youtube Live ID: ")
+            live_id = 'WcFABf4uxM8'
+            t = threading.Thread(target=auto_speech)
+            t.start()
+            ytt = threading.Thread(target=live_preparation)
+            ytt.start()
+            yt_live(live_id)
         
         else:
             print('Mode not found')
