@@ -38,7 +38,8 @@ def get_prompt():
         
     prompt.append({
         "role" : "system",
-        "content": "Here is the latest conversation.\n*Make sure your response is within 100 characters!\n"
+        "content": "Here is the latest conversation.\n*Make sure your response is within 150 characters, and \
+            dont use the same sentence as already recorded in conversation history!"
     })
 
     if len(history) != 0:

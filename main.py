@@ -31,13 +31,17 @@ is_speaking = False
 
 def handle_from_input(text):
     global is_speaking
+
+    if len(text) > 50:
+        return
+    
     is_speaking = True
 
     print("Questions: " + text)
     result = user_name + " berkata " + text 
     add_conversation("user", result)
 
-    duration = speech_text(f"{user_name} bilang {text}")
+    speech_text(f"dari {user_name}, {text}")
 
     # time.sleep(duration)
     chat_gpt_generate()
@@ -89,6 +93,10 @@ def format_audio_to_text(file):
 
         transcript = openai.Audio.transcribe("whisper-1", file_audio)
         message = transcript.text
+
+        if len(message) > 50:
+            return
+
         print(f"Questions : {message}")
         
         result = user_name + " berkata " + message
@@ -129,12 +137,24 @@ def chat_gpt_generate():
         clean_message = re.sub(r'[:;)(@]', '', message)
         conversation.append({'role': 'assistant', 'content': clean_message})
         print(f"Assistant: {clean_message}")
+
+        # if conversation[-2]['role'] == 'user':
+        #     message_to_speach = combined_message(clean_message)
+        # else:
+        #     message_to_speach = clean_message
+
         speech_text(clean_message)
 
         is_speaking = False
         auto_speech_count = 10
     except Exception as e:
         print("Generate response Error: {0}".format(e))
+        is_speaking = False
+        auto_speech_count = 10
+
+def combined_message(message):
+    global current_user_message
+    return f"{current_user_message}. {message}"
     
 
 
@@ -151,11 +171,11 @@ def auto_speech():
     while True:
         time.sleep(1)
         auto_speech_count -= 1
-        print(auto_speech_count)
+        # print(auto_speech_count)
 
-        # if auto_speech_count <= 0 and not is_speaking:
-        #     add_conversation("system", "halo")
-        #     chat_gpt_generate()
+        if auto_speech_count <= 0 and not is_speaking:
+            add_conversation("system", "you are idling. talk anything to your viewer")
+            chat_gpt_generate()
 
 
 
